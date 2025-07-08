@@ -2,7 +2,7 @@
 
 ## 1. 环境设置
 
-确保您已经安装了Python 3.7+，然后安装依赖：
+确保已经安装了Python 3.7+，然后安装依赖：
 
 ```bash
 pip install -r requirements.txt
@@ -10,10 +10,10 @@ pip install -r requirements.txt
 
 ## 2. 准备文件
 
-确保您有以下文件：
+确保有以下文件：
 
 - `standard_shop_name.csv` - 标准店铺名称列表（每行一个店铺名称）
-- 您的Azure AI Content Understanding JSON结果文件
+- Azure AI Content Understanding JSON 结果文件
 
 ## 3. 基本使用
 
@@ -36,7 +36,7 @@ python batch_processor.py \
 
 ## 4. 调整参数
 
-根据您的需求调整相似度阈值：
+根据需求调整相似度阈值：
 
 ```bash
 python shop_name_matcher.py \
