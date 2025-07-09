@@ -125,7 +125,7 @@ class ShopNameMatcher:
                     return (standard_name, 1.0, "SHEIN-prefix added exact match")
         
         # 特殊处理5：短词且只有一个字符不同的情况（如 Oazy/Dazy）
-        if len(ocr_name) <= 5:  # 只对短词应用此规则
+        if len(ocr_name) <= 10:  # 只对短词应用此规则
             for standard_name in self.standard_shop_names:
                 # 检查长度是否相同
                 if len(standard_name) == len(ocr_name):
