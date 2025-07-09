@@ -124,6 +124,29 @@ class ShopNameMatcher:
                 if standard_suffix == ocr_name_lower:
                     return (standard_name, 1.0, "SHEIN-prefix added exact match")
         
+        # 特殊处理5：短词且只有一个字符不同的情况（如 Oazy/Dazy）
+        if len(ocr_name) <= 5:  # 只对短词应用此规则
+            for standard_name in self.standard_shop_names:
+                # 检查长度是否相同
+                if len(standard_name) == len(ocr_name):
+                    # 计算编辑距离（直接使用原始编辑距离，而不是相似度）
+                    edit_distance = self.levenshtein.distance(ocr_name_lower, standard_name.lower())
+                    # 如果只有一个字符不同
+                    if edit_distance == 1:
+                        # 计算常规相似度
+                        lev_similarity = self.levenshtein.normalized_similarity(ocr_name_lower, standard_name.lower())
+                        jw_similarity = self.jaro_winkler.normalized_similarity(ocr_name_lower, standard_name.lower())
+                        # 提高相似度权重
+                        lev_similarity = min(1.0, lev_similarity * 1.2)  # 提高20%权重
+                        jw_similarity = min(1.0, jw_similarity * 1.1)  # 提高10%权重
+                        
+                        # 选择更高的相似度
+                        similarity = max(lev_similarity, jw_similarity)
+                        if similarity > best_similarity:
+                            best_match = standard_name
+                            best_similarity = similarity
+                            best_algorithm = "Single-character difference"
+        
         # 对所有标准名称计算相似度
         for standard_name in self.standard_shop_names:
             standard_lower = standard_name.lower()
