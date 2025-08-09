@@ -70,7 +70,6 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-output/
 temp/
 tmp/
 *.tmp
