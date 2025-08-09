@@ -37,6 +37,3 @@ env/
 
 # 日志文件
 *.log
-
-# 输出文件（可选择是否忽略）
-# output/results.csv
