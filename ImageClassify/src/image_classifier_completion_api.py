@@ -1,12 +1,9 @@
-import base64
 import csv
 import json
 import os
 import sys
 from pathlib import Path
 from typing import Dict, List
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 from dotenv import load_dotenv
 from openai import AzureOpenAI
 
@@ -20,35 +17,24 @@ client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
 )
 
-# 加载分类指令
+# 加载系统提示词/指令
 def load_instructions() -> str:
     instructions_path = Path(__file__).with_name("instructions.txt")
     return instructions_path.read_text(encoding="utf-8").strip()
 
-# 下载图片并转换为 base64 data URI
-def download_image_as_data_uri(url: str) -> str:
-    try:
-        req = Request(url, headers={'User-Agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-        with urlopen(req) as resp:
-            image_data = resp.read()
-        image_b64 = base64.b64encode(image_data).decode('utf-8')
-        return f"data:image/jpeg;base64,{image_b64}"
-    except (HTTPError, URLError, Exception) as e:
-        raise Exception(f"Failed to load image: {e}\n")
-
-# 从 GPT 响应中提取分类结果
+# 从 Chat Completions API 响应中提取分类结果
 def extract_result_from_response(response: Dict) -> str:
     try:
-        for item in response.get('output', []):
-            if item.get('type') == 'message' and item.get('role') == 'assistant':
-                for content_item in item.get('content', []):
-                    if content_item.get('type') == 'output_text':
-                        text = content_item.get('text', '').strip()
-                        try:
-                            result_json = json.loads(text)
-                            return result_json.get('result', '无')
-                        except json.JSONDecodeError:
-                            return text or '无'
+        choices = response.get('choices', [])
+        if choices:
+            message = choices[0].get('message', {})
+            content = message.get('content', '').strip()
+            if content:
+                try:
+                    result_json = json.loads(content)
+                    return result_json.get('result', '无')
+                except json.JSONDecodeError:
+                    return content or '无'
         return '无'
     except Exception:
         return '无'
@@ -56,17 +42,21 @@ def extract_result_from_response(response: Dict) -> str:
 # 调用 Azure OpenAI 进行图像分类
 def invoke_azure_openai(url: str) -> Dict:
     try:
-        response = client.responses.create(
+        response = client.chat.completions.create(
             model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
-            instructions=load_instructions(),
-            reasoning={"effort": os.getenv("REASONING_EFFORT"), "summary": os.getenv("REASONING_SUMMARY")},
-            input=[{
-                "role": "user",
-                "content": [
-                    {"type": "input_text", "text": "Please follow the instructions to classify the image and return only the specified JSON."},
-                    {"type": "input_image", "image_url": download_image_as_data_uri(url)},
-                ],
-            }],
+            messages=[
+                {
+                    "role": "system",
+                    "content": load_instructions(),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Please follow the instructions to classify the image and return only the specified JSON."},
+                        {"type": "image_url", "image_url": {"url": url}},
+                    ],
+                }
+            ]
         )
         return response
     except Exception as e:
@@ -78,7 +68,13 @@ def invoke_azure_openai(url: str) -> Dict:
 # 计算并显示分类准确率和详细结果
 def calculate_and_display_accuracy(results: List[Dict]) -> None:
     valid_results = [r for r in results if r['result'] != "Failed"]
-    correct = sum(1 for r in valid_results if r['tags'] == r['result'])
+    
+    def is_match(expected: str, detected: str) -> bool:
+        if detected == "Failed":
+            return False
+        return expected in detected
+    
+    correct = sum(1 for r in valid_results if is_match(r['tags'], r['result']))
     failed_count = len(results) - len(valid_results)
     
     print(f"Successfully processed: {len(valid_results)} images")
@@ -91,7 +87,7 @@ def calculate_and_display_accuracy(results: List[Dict]) -> None:
         print("\nDetailed Results:")
         for result in results:
             tags, detected = result['tags'], result['result']
-            status = "✓" if tags == detected and detected != "Failed" else "✗"
+            status = "✓" if is_match(tags, detected) else "✗"
             print(f"  {status} Expected: {tags} | Detected: {detected}")
     else:
         print("No valid results to calculate accuracy.")
@@ -114,7 +110,7 @@ def process_single_image(url: str) -> None:
 # 批量处理 CSV 文件中的图片
 def process_csv_batch() -> None:
     workspace_path = Path(__file__).parent.parent
-    samples_path = workspace_path / "data" / "samples.csv"
+    samples_path = workspace_path / "data" / "sample_images.csv"
     results_path = workspace_path / "output" / "results.csv"
     
     results_path.parent.mkdir(exist_ok=True)
@@ -139,7 +135,7 @@ def process_csv_batch() -> None:
                 result = extract_result_from_response(response.model_dump())
                 print(f"Result: {result}\n")
             except Exception as e:
-                print(f"Error: {e}")
+                print(f"Error: {e}\n")
                 result = "Failed"
 
             results.append({
